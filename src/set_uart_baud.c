@@ -1,0 +1,242 @@
+#define _GNU_SOURCE
+
+#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <getopt.h>
+#include <linux/pci.h>
+#include <linux/types.h>
+#include <stdint.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+/* Recursive euclidean algorithm */
+uint32_t gcd(uint32_t a, uint32_t b) {
+	if (a == 0) return b;
+	else if (b == 0) return a;
+	else return gcd(b, a%b);
+}
+
+#define FRAC_BITS 11
+#define FRAC_MSK ((1<<FRAC_BITS)-1)
+#define IDIV_BITS 7
+#define IDIV_MSK ((1<<IDIV_BITS)-1)
+#define BASE_CLK_FREQ 125000000
+uint32_t frac_clk_gen(uint32_t b) {
+	uint32_t fracn, d;
+	uint32_t idiv = BASE_CLK_FREQ / b;
+
+	assert(idiv < (1<<IDIV_BITS));
+	fracn = BASE_CLK_FREQ % b;
+	d = gcd(fracn, b);
+	fracn /= d;
+	b /= d;
+	while (b >= (1<<FRAC_BITS)) { /* Scale down if >FRAC_BITS bits */
+		b >>= 1;
+		fracn >>= 1;
+	}
+	if (b == 0) b = 1;
+
+	return (idiv<<(FRAC_BITS*2))|(fracn<<FRAC_BITS)|b;
+}
+
+/* If we had to scale down, actual frequency will be off */
+float actual_freq(uint32_t ctl) {
+	uint32_t idiv = ctl>>(FRAC_BITS*2);
+	float frac = (ctl>>FRAC_BITS)&FRAC_MSK;
+	frac /= ctl&FRAC_MSK;
+	frac += idiv;
+	return BASE_CLK_FREQ / frac;
+}
+/* This is the max frequency of one period. (fractional divide alternates between min/max) */
+float max_freq(uint32_t ctl) {
+	return actual_freq((ctl>>(FRAC_BITS*2))<<(FRAC_BITS*2));
+}
+/* This is the min frequency of one period. (fractional divide alternates between min/max) */
+float min_freq(uint32_t ctl) {
+	return actual_freq(((ctl>>(FRAC_BITS*2))+1)<<(FRAC_BITS*2));
+}
+/* Parts per million error */
+int32_t ppm(float ctl, float b) {
+	float err = (b - ctl)/b;
+	return err * 1000000;
+}
+
+/* Uart specific stuff... */
+float bitperiod_min(uint32_t ctl) {
+	uint32_t idiv = ctl>>(FRAC_BITS*2);
+	uint32_t fracn = (ctl>>FRAC_BITS)&FRAC_MSK;
+	uint32_t fracd = ctl&FRAC_MSK;
+	uint32_t clks = idiv*16;
+
+	clks += (fracd-1+(fracn*16))/fracd;
+	return (float)BASE_CLK_FREQ/clks;
+}
+
+float bitperiod_max(uint32_t ctl) {
+	uint32_t idiv = ctl>>(FRAC_BITS*2);
+	uint32_t fracn = (ctl>>FRAC_BITS)&FRAC_MSK;
+	uint32_t fracd = ctl&FRAC_MSK;
+	uint32_t clks = idiv*16;
+
+	clks += fracn*16/fracd;
+	return (float)BASE_CLK_FREQ/clks;
+}
+
+float byteperiod_min(uint32_t ctl) {
+	uint32_t idiv = ctl>>(FRAC_BITS*2);
+	uint32_t fracn = (ctl>>FRAC_BITS)&FRAC_MSK;
+	uint32_t fracd = ctl&FRAC_MSK;
+	uint32_t clks = idiv*160;
+
+	clks += (fracd-1+(fracn*160))/fracd;
+	return ((float)BASE_CLK_FREQ/clks)*10;
+}
+
+float byteperiod_max(uint32_t ctl) {
+	uint32_t idiv = ctl>>(FRAC_BITS*2);
+	uint32_t fracn = (ctl>>FRAC_BITS)&FRAC_MSK;
+	uint32_t fracd = ctl&FRAC_MSK;
+	uint32_t clks = idiv*160;
+
+	clks += fracn*160/fracd;
+	return ((float)BASE_CLK_FREQ/clks)*10;
+}
+
+/* Returns 32-bit value to write to FPGA reg if 16550 UART
+ * is set for 115200 divisor (dl = 1) */
+uint32_t set_baudrate(uint8_t channel, uint32_t baudrate) {
+	return frac_clk_gen(baudrate * 16)|(channel<<29);
+}
+
+static uint32_t get_fpga_phy(void)
+{
+	static uint32_t fpga = 0;
+
+	if (fpga == 0) {
+		uint32_t config[PCI_STD_HEADER_SIZEOF];
+		FILE *f = fopen("/sys/bus/pci/devices/0000:02:00.0/config", "r");
+
+		if (fread(config, 1, sizeof(config), f) > 0) {
+			if (config[PCI_BASE_ADDRESS_2 / 4])
+				fpga = (uint32_t)config[PCI_BASE_ADDRESS_2 / 4];
+		} else {
+			fprintf(stderr, "Can't read from the config!\n");
+		}
+		fclose(f);
+	}
+
+	return fpga;
+}
+
+void usage(char **argv) {
+	fprintf(stderr,
+		"Usage: %s [OPTIONS] ...\n"
+		"Technologic Systems UART baud rate control\n"
+		"\n"
+		"  -p, --port <num>       Set port to modify\n"
+		"  -b, --baud <rate>      Specify target baud rate\n"
+		"  -h, --help             This message\n"
+		"\n",
+		argv[0]
+	);
+}
+
+#ifdef CTL
+int main(int argc, char **argv)
+{
+	int c;
+	int opt_port = -1;
+	int opt_baud = 0;
+	int opt_verbose = 0;
+	uint32_t reg;
+	int mem;
+	volatile uint32_t *fpga_bar0;
+	uint32_t fpga_bar0_addr;
+
+	static struct option long_options[] = {
+		{ "port", required_argument, 0, 'p' },
+		{ "baud", required_argument, 0, 'b' },
+		{ "verbose", 0, 0, 'v' },
+		{ "help", 0, 0, 'h' },
+		{ 0, 0, 0, 0 }
+	};
+
+	if(argc == 1) {
+		usage(argv);
+		return 1;
+	}
+
+	if ((fpga_bar0_addr = get_fpga_phy()) == 0) {
+		fprintf(stderr, "Warning:  Did not discover FPGA base from PCI probe\n");
+		fpga_bar0_addr = (uint32_t)0xe4080000;
+	}
+	mem = open("/dev/mem", O_RDWR|O_SYNC);
+	fpga_bar0 = mmap(0, 
+			 getpagesize(),
+			 PROT_READ|PROT_WRITE,
+			 MAP_SHARED,
+			 mem,
+			 fpga_bar0_addr); 
+
+	while((c = getopt_long(argc, argv, "p:b:vh", long_options, NULL)) != -1) {
+		switch(c) {
+		case 'p':
+			opt_port = atoi(optarg);
+			if(opt_port < 0 || opt_port > 7) {
+				printf("Port must be between 0-7\n");
+			}
+			break;
+		case 'b':
+			opt_baud = atoi(optarg);
+			if(opt_baud < 115200) {
+				fprintf(stderr, "For baud rates < 115200, use 115200 as the baudrate and set the baud rate with termios\n");
+				return 1;
+			}
+			break;
+		case 'v':
+			opt_verbose = 1;
+			break;
+		case ':':
+			fprintf(stderr, "%s: option `-%c' requires an argument\n",
+				argv[0], optopt);
+			break;
+		default:
+			fprintf(stderr, "%s: option `-%c' is invalid\n",
+                		argv[0], optopt);
+		case 'h':
+			usage(argv);
+			return 1;
+		}
+	}
+
+	printf("port=%d\n", opt_port);
+	printf("requested_baud=%d\n", opt_baud);
+
+	reg = frac_clk_gen(opt_baud * 16);
+	printf("actual_baud=%f\n", actual_freq(reg)/16);
+	printf("baud_ppm_error=%d\n", ppm(reg, opt_baud*16));
+	if(opt_verbose) {
+		printf("xtal_freq_required_mhz=%f\n", opt_baud*16/1e6);
+		printf("xtal_freq_actual_mhz=%f\n", actual_freq(reg)/1e6);
+		printf("min1bit_freq=%f\n", bitperiod_min(reg));
+		printf("min1bit_freq_ppm=%d\n", ppm(bitperiod_min(reg), opt_baud));
+		printf("max1bit_freq=%f\n", bitperiod_max(reg));
+		printf("max1bit_freq_ppm=%d\n", ppm(bitperiod_max(reg), opt_baud));
+		printf("min10bit_freq=%f\n", byteperiod_min(reg));
+		printf("min10bit_freq_ppm=%d\n", ppm(byteperiod_min(reg), opt_baud));
+		printf("max10bit_freq=%f\n", byteperiod_max(reg));
+		printf("max10bit_freq_ppm=%d\n", ppm(byteperiod_max(reg), opt_baud));
+	}
+
+	fpga_bar0[0x7c/4] = set_baudrate(opt_port, opt_baud);
+
+	return 0;
+}
+#endif
