@@ -1,0 +1,5 @@
+ts7820-utils (0.1.0-1) unstable; urgency=medium
+
+  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- Mark Featherston <mark@embeddedarm.com>  Fri, 05 Oct 2018 16:11:23 -0700
