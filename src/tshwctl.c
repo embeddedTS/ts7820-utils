@@ -160,7 +160,7 @@ static int silabs_read(int twifd, uint8_t *data, uint16_t addr, int bytes)
 {
 	struct i2c_rdwr_ioctl_data packets;
 	struct i2c_msg msgs[2];
-	char busaddr[2];
+	uint8_t busaddr[2];
 
 	busaddr[0] = ((addr >> 8) & 0xff);
 	busaddr[1] = (addr & 0xff);
@@ -202,7 +202,7 @@ static int silabs_write(int twifd, uint8_t *data, uint16_t addr, int bytes)
 	msg.addr = SILABS_CHIP_ADDRESS;
 	msg.flags = 0;
 	msg.len  = 2 + bytes;
-	msg.buf  = (char *)outdata;
+	msg.buf  = outdata;
 
 	packets.msgs  = &msg;
 	packets.nmsgs = 1;
@@ -261,7 +261,6 @@ struct modelinfo *get_build_variant()
 int main(int argc, char **argv)
 {
 	int c, twifd, model;
-	uint16_t nvram_addr = -1, nvram_data = -1;
 	unsigned char new_mac[6];
 	int opt_info = 0, display_mac = 0, set_mac = 0;
 	int display_cores = 0, display_rate = 0;
@@ -313,10 +312,6 @@ int main(int argc, char **argv)
 	}
 
 	while((c = getopt_long(argc, argv, "im::A:d::l::c::th", long_options, NULL)) != -1) {
-		int gpiofd;
-		int gpio, i;
-		int uart;
-
 		switch(c) {
 		case 'i':
 			opt_info = 1;
@@ -367,7 +362,6 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Microcontroller eeprom written; A power-cycle is needed before the new settings take effect\n");
 	}
 
-
 	if (opt_info){
 		struct modelinfo *variant = get_build_variant();
 		uint8_t strap = nvram_read(twifd, 6);
@@ -378,7 +372,7 @@ int main(int argc, char **argv)
 		printf("max_cores=%d\n", variant->maxcores);
 		printf("max_rate=%d\n", variant->maxrate);
 		printf("current_cores=%d\n", get_cpu_cores(strap));
-		printf("current_rate=%dMHz\n", get_cpu_rate(strap));
+		printf("current_rate_mhz=%d\n", get_cpu_rate(strap));
 		printf("cpu_millicelcius=%d\n", get_cputemp());
 	}
 
