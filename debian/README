@@ -1,5 +1,6 @@
-ts7820-utils (1.0.0) unstable; urgency=medium
+The Debian Package ts7820-utils
+----------------------------
 
-  * Initial Release.
+Initial Release
 
  -- Mark Featherston <mark@embeddedarm.com>  Wed, 10 Oct 2018 21:28:50 +0000

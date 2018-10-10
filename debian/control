@@ -1,15 +1,15 @@
 Source: ts7820-utils
-Section: unknown
+Section: utils
 Priority: optional
 Maintainer: Mark Featherston <mark@embeddedarm.com>
-Build-Depends: debhelper (>= 11)
-Standards-Version: 4.1.3
-Homepage: <insert the upstream URL, if relevant>
-#Vcs-Browser: https://salsa.debian.org/debian/ts7820-utils
-#Vcs-Git: https://salsa.debian.org/debian/ts7820-utils.git
+Build-Depends: debhelper (>= 9), autotools-dev
+Standards-Version: 3.9.8
+Homepage: https://github.com/embeddedarm/ts7820-utils
+#Vcs-Browser: https://github.com/embeddedarm/ts7820-utils
+#Vcs-Git: https://github.com/embeddedarm/ts7820-utils.git
 
 Package: ts7820-utils
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: <insert up to 60 chars description>
- <insert long description, indented with spaces>
+Description: TS-7820 series utilities
+  Includes utilities for manipulating IO, reading analog samples, checking onboard versions, and updating the FPGA.
