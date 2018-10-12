@@ -276,7 +276,6 @@ int main(int argc, char **argv)
 		{ "nvrw", optional_argument, 0, 'D' },
 		{ "rate", optional_argument, 0, 'l' },
 		{ "cores", optional_argument, 0, 'c' },
-		{ "targetbaud", required_argument, 0, 'b' },
 		{ "temp", 0, 0, 't' },
 		{ "help", 0, 0, 'h' },
 		{ 0, 0, 0, 0 }
