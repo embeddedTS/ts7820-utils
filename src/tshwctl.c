@@ -27,7 +27,7 @@ struct modelinfo
 	char *name;
 };
 
-struct modelinfo Models[] =
+struct modelinfo ts7820_models[] =
 {
 	{
 		.variant = 1,
@@ -36,7 +36,16 @@ struct modelinfo Models[] =
 		.maxcores = 2
 	}
 };
-#define MAX_VARIANTS 1
+
+struct modelinfo ts7840_models[] =
+{
+	{
+		.variant = 1,
+		.name = "TS-7840-DMN1I",
+		.maxrate = 1333,
+		.maxcores = 2
+	}
+};
 
 #define ARRAY_SIZE(array) \
     (sizeof(array) / sizeof(*array))
@@ -252,10 +261,15 @@ int get_cputemp()
 	return atoi(buf);
 }
 
-struct modelinfo *get_build_variant()
+struct modelinfo *get_build_variant(int model)
 {
 	/* Until we have straps implemented, just assume the only build */
-	return &Models[0];
+	if(model == 0x7820) {
+		return &ts7820_models[0];
+	} else if (model == 0x7840) {
+		return &ts7840_models[0];
+	}
+	return NULL;
 }
 
 int main(int argc, char **argv)
@@ -299,8 +313,8 @@ int main(int argc, char **argv)
 			 fpga_bar0_addr); 
 
 	model = get_model();
-	if(model != 0x7820){
-		fprintf(stderr, "Unsupported model\n");
+	if(!model) {
+		fprintf(stderr, "Unsupported model 0x%X\n", model);
 		return 1;
 	}
 	
@@ -362,7 +376,7 @@ int main(int argc, char **argv)
 	}
 
 	if (opt_info){
-		struct modelinfo *variant = get_build_variant();
+		struct modelinfo *variant = get_build_variant(model);
 		uint8_t strap = nvram_read(twifd, 6);
 		uint32_t reg = fpga_bar0[0x100/4];
 
@@ -392,7 +406,7 @@ int main(int argc, char **argv)
 	{
 		uint8_t strap, new_strap;
 		int i;
-		struct modelinfo *variant = get_build_variant();
+		struct modelinfo *variant = get_build_variant(model);
 		strap = new_strap = nvram_read(twifd, 6);
 
 		if(variant == NULL) {

@@ -254,7 +254,7 @@ int main(int argc, char **argv)
 	}
 
 	model = get_model();
-	if(model != 0x7820){
+	if(!model){
 		fprintf(stderr, "Unsupported model\n");
 		return 1;
 	}
