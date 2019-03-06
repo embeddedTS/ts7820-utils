@@ -85,12 +85,11 @@ void usage(char **argv) {
 		"\n"
 		"  -i, --info             Print board revisions\n"
 		"  -m, --macaddr (<addr>) Print, or optionally change the mac address\n"
-		"  -A, --nvadd <value>    Writes the value to the specified address\n"
-		"  -D, --nvrw (<value>)     Read nvaddr, or optionally write specified value\n"
+		"  -w, --watchdog <value> Set to 1 or 0 to enable/disable the microcontroller watchdog.\n"
 		"  -l  --rate (<rate>)    List all possible rates, or set clock rate.  Set 0 to use max\n"
 		"  -c  --cores (<1/2)>)   Read number of enabled cores, or if specified set number\n"
 		"                         of max cores.  Set 0 to use max\n"
-     		"  -t  --temp             Display board temperature\n"
+		"  -t  --temp             Display board temperature\n"
 		"  -h, --help             This message\n"
 		"\n",
 		argv[0]
@@ -264,7 +263,7 @@ int main(int argc, char **argv)
 	unsigned char new_mac[6];
 	int opt_info = 0, display_mac = 0, set_mac = 0;
 	int display_cores = 0, display_rate = 0;
-	int cpu_cores = -1, cpu_rate = -1;
+	int cpu_cores = -1, cpu_rate = -1, opt_watchdog = -1;
 	int mem;
 	volatile uint32_t *fpga_bar0;
 	uint32_t fpga_bar0_addr;
@@ -272,8 +271,7 @@ int main(int argc, char **argv)
 	static struct option long_options[] = {
 		{ "info", 0, 0, 'i' },
 		{ "macaddr", optional_argument, 0, 'm' },
-		{ "nvadd", required_argument, 0, 'A' },
-		{ "nvrw", optional_argument, 0, 'D' },
+		{ "watchdog", required_argument, 0, 'w' },
 		{ "rate", optional_argument, 0, 'l' },
 		{ "cores", optional_argument, 0, 'c' },
 		{ "temp", 0, 0, 't' },
@@ -341,6 +339,10 @@ int main(int argc, char **argv)
 			display_rate = 1;
 			break;
 
+		case 'w':
+			opt_watchdog = atoi(optarg);
+			break;
+
 		case ':':
 			fprintf(stderr, "%s: option `-%c' requires an argument\n",
 				argv[0], optopt);
@@ -348,7 +350,7 @@ int main(int argc, char **argv)
 
 		default:
 			fprintf(stderr, "%s: option `-%c' is invalid\n",
-                		argv[0], optopt);
+                		argv[0], c);
 
 		case 'h':
 			usage(argv);
@@ -388,8 +390,7 @@ int main(int argc, char **argv)
 			mac[5],mac[4],mac[3],mac[2],mac[1],mac[0]);
 	}
 
-	if(cpu_cores != -1 || cpu_rate != -1)
-	{
+	if(cpu_cores != -1 || cpu_rate != -1) {
 		uint8_t strap, new_strap;
 		int i;
 		struct modelinfo *variant = get_build_variant();
@@ -429,8 +430,7 @@ int main(int argc, char **argv)
 
 		if(cpu_rate != -1) {
 			new_strap &= 0xe0;
-			for (i = 0; i < ARRAY_SIZE(cpurates); i++)
-			{
+			for (i = 0; i < ARRAY_SIZE(cpurates); i++) {
 				if(cpu_rate == cpurates[i]) {
 					new_strap |= cpusar[i];
 					break;
@@ -438,7 +438,7 @@ int main(int argc, char **argv)
 			}
 		}
 
-		if(new_strap == strap){
+		if(new_strap == strap) {
 			fprintf(stderr, "Requested strap value 0x%X is already set\n", new_strap);
 		} else {
 			nvram_write(twifd, 6, new_strap);
@@ -446,14 +446,25 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if(display_cores)
-	{
+	if(opt_watchdog != -1) {
+		uint8_t strap = nvram_read(twifd, 7);
+
+		if(opt_watchdog) {
+			strap |= 0x1;
+		} else {
+			strap &= ~0x1;
+		}
+
+		nvram_write(twifd, 7, strap);
+		fprintf(stderr, "Watchdog will be enabled next boot\n");
+	}
+
+	if(display_cores) {
 		uint8_t strap = nvram_read(twifd, 6);
 		printf("current_rate=%dMHz\n", get_cpu_rate(strap));
 	}
 
-	if(display_rate)
-	{
+	if(display_rate) {
 		uint8_t strap = nvram_read(twifd, 6);
 		printf("current_cores=%d\n", get_cpu_cores(strap));
 	}

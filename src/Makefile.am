@@ -12,4 +12,7 @@ set_uart_baud_CPPFLAGS = -DCTL
 load_fpga_flash_SOURCES = load_fpga_flash.c
 load_fpga_flash_LDFLAGS =
 
-bin_PROGRAMS = tshwctl set_uart_baud load_fpga_flash tsmicroctl
+tsprodinfo_SOURCES = tsprodinfo.c
+tsprodinfo_LDFLAGS =
+
+bin_PROGRAMS = tshwctl set_uart_baud load_fpga_flash tsmicroctl tsprodinfo
