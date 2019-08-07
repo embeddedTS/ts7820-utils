@@ -344,9 +344,7 @@ int main(int argc, char **argv)
 {
 	char *opt_write = 0, *opt_read = 0;
 	int opt_verify = 0;
-	off_t len, pos;
 	int ret = 0;
-	int rpdfd;
 	int c;
 
 	static struct option long_options[] = {
