@@ -77,8 +77,8 @@ static uint32_t get_fpga_phy(void)
 		FILE *f = fopen("/sys/bus/pci/devices/0000:02:00.0/config", "r");
 
 		if (fread(config, 1, sizeof(config), f) > 0) {
-			if (config[PCI_BASE_ADDRESS_2 / 4])
-				fpga = (uint32_t)config[PCI_BASE_ADDRESS_2 / 4];
+			if (config[PCI_BASE_ADDRESS_0 / 4])
+				fpga = (uint32_t)config[PCI_BASE_ADDRESS_0 / 4];
 		} else {
 			fprintf(stderr, "Can't read from the config!\n");
 		}
@@ -298,18 +298,6 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((fpga_bar0_addr = get_fpga_phy()) == 0) {
-		fprintf(stderr, "Warning:  Did not discover FPGA base from PCI probe\n");
-		fpga_bar0_addr = (uint32_t)0xe4080000;
-	}
-	mem = open("/dev/mem", O_RDWR|O_SYNC);
-	fpga_bar0 = mmap(0, 
-			 getpagesize(),
-			 PROT_READ|PROT_WRITE,
-			 MAP_SHARED,
-			 mem,
-			 fpga_bar0_addr); 
-
 	model = get_model();
 	if(!model) {
 		fprintf(stderr, "Unsupported model 0x%X\n", model);
@@ -322,7 +310,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	while((c = getopt_long(argc, argv, "im::A:d::l::c::th", long_options, NULL)) != -1) {
+	while((c = getopt_long(argc, argv, "im::w:r::l::qc:th", long_options, NULL)) != -1) {
 		switch(c) {
 		case 'i':
 			opt_info = 1;
@@ -335,8 +323,9 @@ int main(int argc, char **argv)
 					return 1;
 				}
 				set_mac = 1;
+			} else {
+				display_mac = 1;
 			}
-			display_mac = 1;
 			break;
 
 		case 'c':
@@ -355,6 +344,10 @@ int main(int argc, char **argv)
 
 		case 'w':
 			opt_watchdog = atoi(optarg);
+			break;
+
+		case 't':
+			printf("Not yet implemented\n");
 			break;
 
 		case ':':
@@ -380,7 +373,20 @@ int main(int argc, char **argv)
 	if (opt_info){
 		struct modelinfo *variant = get_build_variant(model);
 		uint8_t strap = nvram_read(twifd, 6);
-		uint32_t reg = fpga_bar0[0x100/4];
+		uint32_t reg;
+		if ((fpga_bar0_addr = get_fpga_phy()) == 0) {
+			fprintf(stderr, "Error:  Did not discover FPGA base from PCI probe\n");
+			return 1;
+		}
+		mem = open("/dev/mem", O_RDWR|O_SYNC);
+		fpga_bar0 = mmap(0,
+				 getpagesize(),
+				 PROT_READ|PROT_WRITE,
+				 MAP_SHARED,
+				 mem,
+				 fpga_bar0_addr);
+
+		reg = fpga_bar0[0x100/4];
 
 		printf("model=%s\n", variant->name);
 		printf("fpga_rev=%d\n", reg & 0xff);
@@ -465,22 +471,32 @@ int main(int argc, char **argv)
 
 		if(opt_watchdog) {
 			strap |= 0x1;
+			fprintf(stderr, "Watchdog will be enabled next boot\n");
 		} else {
 			strap &= ~0x1;
+			fprintf(stderr, "Watchdog will be disabled next boot\n");
 		}
 
 		nvram_write(twifd, 7, strap);
-		fprintf(stderr, "Watchdog will be enabled next boot\n");
 	}
 
 	if(display_cores) {
 		uint8_t strap = nvram_read(twifd, 6);
-		printf("current_rate=%dMHz\n", get_cpu_rate(strap));
+		printf("current_cores=%d\n", get_cpu_cores(strap));
 	}
 
 	if(display_rate) {
+		int i;
+		struct modelinfo *variant = get_build_variant(model);
 		uint8_t strap = nvram_read(twifd, 6);
-		printf("current_cores=%d\n", get_cpu_cores(strap));
+
+		printf("current_rate=%dMHz\n", get_cpu_rate(strap));
+
+		for (i = 0; i < ARRAY_SIZE(cpurates); i++) {
+			if(cpurates[i] <= variant->maxrate) {
+				printf("available_rate_%d=%d\n", i, cpurates[i]);
+			}
+		}
 	}
 
 	return 0;
