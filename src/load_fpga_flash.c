@@ -11,6 +11,13 @@
 #include <string.h>
 #include <sys/time.h>
 
+#include "fpga.c"
+
+/* Offset is 0 for factory load, 0xf0000 for app load */
+#ifndef OFFSET
+#define OFFSET 0xf0000
+#endif
+
 /*
  * 32-bit FPGA read register
  *   bit 19: toggles when data_valid ASMI output is 1
@@ -68,17 +75,16 @@ static const unsigned char reverse[] =
 	0x3F, 0xBF, 0x7F, 0xFF
 };
 
-volatile uint32_t *bar0;
 uint32_t asmi_reg_read()
 {
-	return bar0[0x8/4];
+	return fpga_peek32(0x8);
 }
 
 
 void asmi_reg_write(uint32_t data)
 {
-	bar0[0x8/4] = data;
-	bar0[0x8/4];
+	fpga_poke32(0x8, data);
+	fpga_peek32(0x8);
 }
 
 int static asmi_busy(int timeout_ms)
@@ -210,28 +216,6 @@ static int asmi_write(uint8_t *data, uint32_t offset, uint32_t len, int en_rever
 	return ret;
 }
 
-uint32_t* fpga_init(void)
-{
-	uint32_t *ret = 0;
-	int rfd;
-
-	/* This is always slot 3 on the TS-7840 */
-	rfd = open("/sys/bus/pci/devices/0000:02:00.0/resource0", O_RDWR|O_SYNC);
-	if(rfd == -1){
-		perror("FPGA BAR0 open");
-		exit(1);
-	}
-
-	ret = (uint32_t *)mmap(0, getpagesize(), PROT_READ|PROT_WRITE, MAP_SHARED, rfd, 0);
-	if(ret == MAP_FAILED) {
-		perror("FPGA BAR0 mmap");
-		exit(1);
-	}
-
-	close(rfd);
-	return ret;
-}
-
 void usage(char **argv) {
 	fprintf(stderr,
 		"Usage: %s [OPTIONS] ...\n"
@@ -278,14 +262,13 @@ uint32_t do_write_rpd(char *path, int en_verify)
 			return 0;
 		}
 
-		/* FPGA App load starts at 0xf0000*/
-		if(asmi_write(data, 0xf0000 + pos, alen, 1) != 0)
+		if(asmi_write(data, OFFSET + pos, alen, 1) != 0)
 			return 0;
 
 		if(!en_verify)
 			continue;
 
-		if(asmi_read(verify, 0xf0000 + pos, alen, 1) != 0)
+		if(asmi_read(verify, OFFSET + pos, alen, 1) != 0)
 			return 0;
 
 		for (x = 0; x < alen; x++) {
@@ -325,7 +308,7 @@ uint32_t do_read_rpd(char *path)
 
 		if(pos + 0x10000 > len) alen = len % 0x10000;
 
-		if(asmi_read(data, 0xf0000 + pos, alen, 1) != 0)
+		if(asmi_read(data, OFFSET + pos, alen, 1) != 0)
 			return 0;
 
 		if(write(rpdfd, data, alen) != alen){
@@ -374,7 +357,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	bar0 = fpga_init();
+	fpga_init();
 
 	/* If the app is interrupted & restarted in the middle of an
 	 * erase/write, it may still be busy.  Assume worst case of up

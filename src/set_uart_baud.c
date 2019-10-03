@@ -18,6 +18,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "fpga.c"
+
 /* Recursive euclidean algorithm */
 uint32_t gcd(uint32_t a, uint32_t b) {
 	if (a == 0) return b;
@@ -117,26 +119,6 @@ uint32_t set_baudrate(uint8_t channel, uint32_t baudrate) {
 	return frac_clk_gen(baudrate * 16)|(channel<<29);
 }
 
-static uint32_t get_fpga_phy(void)
-{
-	static uint32_t fpga = 0;
-
-	if (fpga == 0) {
-		uint32_t config[PCI_STD_HEADER_SIZEOF];
-		FILE *f = fopen("/sys/bus/pci/devices/0000:02:00.0/config", "r");
-
-		if (fread(config, 1, sizeof(config), f) > 0) {
-			if (config[PCI_BASE_ADDRESS_2 / 4])
-				fpga = (uint32_t)config[PCI_BASE_ADDRESS_2 / 4];
-		} else {
-			fprintf(stderr, "Can't read from the config!\n");
-		}
-		fclose(f);
-	}
-
-	return fpga;
-}
-
 void usage(char **argv) {
 	fprintf(stderr,
 		"Usage: %s [OPTIONS] ...\n"
@@ -158,9 +140,6 @@ int main(int argc, char **argv)
 	int opt_baud = 0;
 	int opt_verbose = 0;
 	uint32_t reg;
-	int mem;
-	volatile uint32_t *fpga_bar0;
-	uint32_t fpga_bar0_addr;
 
 	static struct option long_options[] = {
 		{ "port", required_argument, 0, 'p' },
@@ -175,17 +154,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((fpga_bar0_addr = get_fpga_phy()) == 0) {
-		fprintf(stderr, "Warning:  Did not discover FPGA base from PCI probe\n");
-		fpga_bar0_addr = (uint32_t)0xe4080000;
-	}
-	mem = open("/dev/mem", O_RDWR|O_SYNC);
-	fpga_bar0 = mmap(0, 
-			 getpagesize(),
-			 PROT_READ|PROT_WRITE,
-			 MAP_SHARED,
-			 mem,
-			 fpga_bar0_addr); 
+	fpga_init();
 
 	while((c = getopt_long(argc, argv, "p:b:vh", long_options, NULL)) != -1) {
 		switch(c) {
@@ -237,7 +206,7 @@ int main(int argc, char **argv)
 		printf("max10bit_freq_ppm=%d\n", ppm(byteperiod_max(reg), opt_baud));
 	}
 
-	fpga_bar0[0x7c/4] = set_baudrate(opt_port, opt_baud);
+	fpga_poke32(0x7c, set_baudrate(opt_port, opt_baud));
 
 	return 0;
 }
