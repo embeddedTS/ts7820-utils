@@ -95,7 +95,6 @@ int main(int argc, char **argv)
 		printf("model=0x%X\n", get_model());
 		printf("fpga_crc32=%d\n", fpga_peek32(0x4));
 		printf("straps=0x%X\n", fpga_peek32(0x10) & 0x1f);
-		printf("cpu_millicelcius=%d\n", get_cputemp());
 	}
 
 	return 0;
