@@ -19,38 +19,34 @@
 #include <unistd.h>
 
 #include "fpga.c"
-
-/* Recursive euclidean algorithm */
-uint32_t gcd(uint32_t a, uint32_t b) {
-	if (a == 0) return b;
-	else if (b == 0) return a;
-	else return gcd(b, a%b);
-}
+#include "frac-clk-gen.c"
 
 #define FRAC_BITS 11
 #define FRAC_MSK ((1<<FRAC_BITS)-1)
 #define IDIV_BITS 7
 #define IDIV_MSK ((1<<IDIV_BITS)-1)
 #define BASE_CLK_FREQ 125000000
-uint32_t frac_clk_gen(uint32_t b) {
-	uint32_t fracn, d;
-	uint32_t idiv = BASE_CLK_FREQ / b;
 
-	assert(idiv < (1<<IDIV_BITS));
-	fracn = BASE_CLK_FREQ % b;
-	d = gcd(fracn, b);
-	fracn /= d;
-	b /= d;
-	while (b >= (1<<FRAC_BITS)) { /* Scale down if >FRAC_BITS bits */
-		b >>= 1;
-		fracn >>= 1;
-	}
-	if (b == 0) b = 1;
-
-	return (idiv<<(FRAC_BITS*2))|(fracn<<FRAC_BITS)|b;
+/* Returns 32-bit value to write to FPGA reg if 16550 UART
+ * is set for 115200 divisor (dl = 1) */
+uint32_t set_baudrate(uint8_t channel, uint32_t baudrate) {
+	return frac_clk_gen(baudrate * 16)|(channel<<29);
 }
 
-/* If we had to scale down, actual frequency will be off */
+void usage(char **argv) {
+	fprintf(stderr,	
+		"Usage: %s [OPTIONS] ...\n"
+		"Technologic Systems UART baud rate control\n"
+		"\n"
+		"  -p, --port <num>       Set port to modify\n"
+		"  -b, --baud <rate>      Specify target baud rate\n"
+		"  -h, --help             This message\n"
+		"\n",
+		argv[0]
+	);
+}
+
+/* If we had to scale down, actual frequency nowill be off */
 float actual_freq(uint32_t ctl) {
 	uint32_t idiv = ctl>>(FRAC_BITS*2);
 	float frac = (ctl>>FRAC_BITS)&FRAC_MSK;
@@ -58,14 +54,7 @@ float actual_freq(uint32_t ctl) {
 	frac += idiv;
 	return BASE_CLK_FREQ / frac;
 }
-/* This is the max frequency of one period. (fractional divide alternates between min/max) */
-float max_freq(uint32_t ctl) {
-	return actual_freq((ctl>>(FRAC_BITS*2))<<(FRAC_BITS*2));
-}
-/* This is the min frequency of one period. (fractional divide alternates between min/max) */
-float min_freq(uint32_t ctl) {
-	return actual_freq(((ctl>>(FRAC_BITS*2))+1)<<(FRAC_BITS*2));
-}
+
 /* Parts per million error */
 int32_t ppm(float ctl, float b) {
 	float err = (b - ctl)/b;
@@ -113,25 +102,6 @@ float byteperiod_max(uint32_t ctl) {
 	return ((float)BASE_CLK_FREQ/clks)*10;
 }
 
-/* Returns 32-bit value to write to FPGA reg if 16550 UART
- * is set for 115200 divisor (dl = 1) */
-uint32_t set_baudrate(uint8_t channel, uint32_t baudrate) {
-	return frac_clk_gen(baudrate * 16)|(channel<<29);
-}
-
-void usage(char **argv) {
-	fprintf(stderr,
-		"Usage: %s [OPTIONS] ...\n"
-		"Technologic Systems UART baud rate control\n"
-		"\n"
-		"  -p, --port <num>       Set port to modify\n"
-		"  -b, --baud <rate>      Specify target baud rate\n"
-		"  -h, --help             This message\n"
-		"\n",
-		argv[0]
-	);
-}
-
 #ifdef CTL
 int main(int argc, char **argv)
 {
@@ -154,6 +124,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	lisp_init();
 	fpga_init();
 
 	while((c = getopt_long(argc, argv, "p:b:vh", long_options, NULL)) != -1) {
@@ -192,8 +163,8 @@ int main(int argc, char **argv)
 
 	reg = frac_clk_gen(opt_baud * 16);
 	printf("actual_baud=%f\n", actual_freq(reg)/16);
-	printf("baud_ppm_error=%d\n", ppm(reg, opt_baud*16));
 	if(opt_verbose) {
+		printf("baud_ppm_error=%d\n", ppm(reg, opt_baud*16));
 		printf("xtal_freq_required_mhz=%f\n", opt_baud*16/1e6);
 		printf("xtal_freq_actual_mhz=%f\n", actual_freq(reg)/1e6);
 		printf("min1bit_freq=%f\n", bitperiod_min(reg));
