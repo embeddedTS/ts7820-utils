@@ -18,11 +18,14 @@ static cl_object frac_clk_gen_sym;
 static void lisp_init(void) {
   char *x = NULL;
   if (lisp_booted == 0) {
-    extern void init_lib_TS_FPGA__ALL_SYSTEMS(cl_object);
+    extern void init_lib_RATMATH(cl_object);
+    //extern void init_lib_TS_FPGA__ALL_SYSTEMS(cl_object);
     cl_boot(0, &x);
-    ecl_init_module(NULL, init_lib_TS_FPGA__ALL_SYSTEMS);
+    ecl_init_module(NULL, init_lib_RATMATH);
+    //ecl_init_module(NULL, init_lib_TS_FPGA__ALL_SYSTEMS);
     atexit(cl_shutdown);
-    frac_clk_gen_sym = ecl_make_symbol("FRAC-CLK-GEN", "TS-FPGA");
+    frac_clk_gen_sym = ecl_make_symbol("FRAC-CLK-GEN", "RATMATH");
+    //frac_clk_gen_sym = ecl_make_symbol("FRAC-CLK-GEN", "TS-FPGA");
     assert (t_symbol == ecl_t_of(frac_clk_gen_sym));
     lisp_booted = 1;
   }
