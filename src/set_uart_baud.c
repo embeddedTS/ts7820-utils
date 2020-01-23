@@ -177,7 +177,7 @@ int main(int argc, char **argv)
 		printf("max10bit_freq_ppm=%d\n", ppm(byteperiod_max(reg), opt_baud));
 	}
 
-	fpga_poke32(0x7c, set_baudrate(opt_port, opt_baud));
+	fpga_poke32(0x20, set_baudrate(opt_port, opt_baud));
 
 	return 0;
 }
