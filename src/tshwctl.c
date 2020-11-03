@@ -14,6 +14,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <assert.h>
+#include <time.h>
 
 #include "fpga.c"
 
@@ -41,12 +42,12 @@ static int get_model(void)
 	}
 	assert(fread(mdl, 256, 1, proc) == 0);
 
-	if (strcasestr(mdl, "TS-7800-v2")) {
-		return 0x7800;
-	} else if (strcasestr(mdl, "TS-7840")){
+	if (strcasestr(mdl, "TS-7840")){
 		return 0x7840;
 	} else if (strcasestr(mdl, "TS-7820")){
 		return 0x7820;
+	} else if (strcasestr(mdl, "TS-7825")){
+		return 0x7825;
 	} else {
 		perror("model");
 		return 0;
@@ -92,9 +93,24 @@ int main(int argc, char **argv)
 	fpga_init();
 
 	if (opt_info){
+		time_t epoch = fpga_peek32(0x0) << 2;
+		struct tm *tm = localtime(&epoch);
+		char strtime[256];
+
+		if(!tm) {
+			perror("localtime");
+			exit(1);
+		}
+
+		if(strftime(strtime, 256, "%a, %d %b %Y %T", tm) == 0) {
+			fprintf(stderr, "strftime failed\n");
+			exit(1);
+		}
+
 		printf("model=0x%X\n", get_model());
-		printf("fpga_crc32=%d\n", fpga_peek32(0x4));
-		printf("straps=0x%X\n", fpga_peek32(0x10) & 0x1f);
+		printf("fpga_buildtime_epoch=%lld\n", (long long)epoch);
+		printf("fpga_buildtime=\"%s\"\n", strtime);
+		printf("gitrev=%x\n", fpga_peek32(0x4));
 	}
 
 	return 0;
