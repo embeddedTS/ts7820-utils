@@ -133,7 +133,6 @@ static int millicelsius(void) {
 	if (s != NULL) {
 		if (fscanf(s, "%d", &t) == 0) t = 0;
 		fclose(s);
-		fprintf(stderr, "%d\n", t);
 	}
 	return t;
 }
