@@ -14,7 +14,6 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <assert.h>
-#include <time.h>
 
 #include "fpga.c"
 
@@ -93,24 +92,15 @@ int main(int argc, char **argv)
 	fpga_init();
 
 	if (opt_info){
-		time_t epoch = fpga_peek32(0x0) << 2;
-		struct tm *tm = localtime(&epoch);
-		char strtime[256];
-
-		if(!tm) {
-			perror("localtime");
-			exit(1);
-		}
-
-		if(strftime(strtime, 256, "%a, %d %b %Y %T", tm) == 0) {
-			fprintf(stderr, "strftime failed\n");
-			exit(1);
-		}
+		uint32_t fpga_rev = fpga_peek32(0x0);
+		uint32_t fpga_hash = fpga_peek32(0x4);
 
 		printf("model=0x%X\n", get_model());
-		printf("fpga_buildtime_epoch=%lld\n", (long long)epoch);
-		printf("fpga_buildtime=\"%s\"\n", strtime);
-		printf("gitrev=%x\n", fpga_peek32(0x4));
+		printf("fpga_rev=%d\n", fpga_rev & 0x7fffffff);
+		if(fpga_rev & (1 << 31))
+			printf("fpga_hash=\"%x-dirty\"\n", fpga_hash);
+		else
+			printf("fpga_hash=\"%x-dirty\"\n", fpga_hash);
 	}
 
 	return 0;
