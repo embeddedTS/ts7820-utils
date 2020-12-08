@@ -6,7 +6,9 @@
 #include <signal.h>
 #include <sched.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <sys/ptrace.h>
 
 /* Compile this with option -lprocps.  It needs libprocps-dev package.
@@ -65,7 +67,6 @@ static void recurse(pid_t pid) {
 			recurse(procs[i].children[j]);
 
 	if (!procs[i].flags & PROC_ALREADY_STOPPED) kill_list[nkills++] = pid;
-
 }
 
 static void idle_inject(void) {
@@ -96,7 +97,7 @@ static void idle_inject(void) {
 	kill_list = malloc(sizeof(pid_t) * nprocs);
 	nkills = 0;
 	for (i = 0; i < nprocs; i++) 
-	  if (procs[i].flags & PROC_ROOT) recurse(procs[i].pid);
+		if (procs[i].flags & PROC_ROOT) recurse(procs[i].pid);
 	for (i = (nkills - 1); i >= 0; i--) {
 //		sending SIGSTOP had side-effect of sending SIGCHLD 
 //		to parent process randomly, use ptrace instead
@@ -137,13 +138,87 @@ static int millicelsius(void) {
 	return t;
 }
 
+
+void usage(char **argv) {
+	fprintf(stderr,
+		"Usage: %s [OPTIONS] ...\n"
+		"Technologic Systems Userspace Idle Injector\n"
+		"\n"
+		"  -l, --led      Specify LED brightness file to toggle, eg:\n"
+		"                 --led /sys/class/leds/right-red-led/brightness\n"
+		"  -t, --maxtemp  Set the max temperature in millicelcius before idle\n"
+		"                 injector starts, or 115000 default.\n"
+		"  -h, --help     This message\n"
+		"  This utility polls the CPU temperature and pauses userspace\n"
+		"  applications until the temperature is reduced.  If specified,\n"
+		"  this will turn on the LED when it is injecting idle.\n"
+		"  Processes starting with @ are never throttled\n"
+		"\n",
+		argv[0]
+	);
+}
+
 int main(int argc, char **argv) {
+	int i;
+	FILE *led = NULL;
+	char *opt_led = 0;
+	int opt_temp = MAXTEMP;
+
+	static struct option long_options[] = {
+		{ "led", required_argument, 0, 'l' },
+		{ "maxtemp", required_argument, 0, 'm' },
+		{ "help", 0, 0, 'h' },
+		{ 0, 0, 0, 0 }
+	};
+
+	while((i = getopt_long(argc, argv, "l:m:h", long_options, NULL)) != -1) {
+		switch(i) {
+		case 'l':
+			opt_led = strdup(optarg);
+			break;
+		case 'm':
+			opt_temp = atoi(optarg);
+			break;
+		case ':':
+			fprintf(stderr, "%s: option `-%c' requires an argument\n",
+				argv[0], optopt);
+			return 1;
+			break;
+		default:
+			fprintf(stderr, "%s: option `-%c' (%d) is invalid\n",
+				argv[0], optopt, optind);
+			return 1;
+			break;
+		case 'h':
+			usage(argv);
+			return 1;
+		}
+	}
+
+	if(opt_led) {
+		led = fopen(opt_led, "r+");
+		if(led == NULL) {
+			perror("Couldn't open LED");
+			return 1;
+		}
+	}
 
 	atexit(idle_cancel);
 
 	for (;;) {
-		if (millicelsius() >= MAXTEMP) idle_inject(); 
-		else idle_cancel(); 
+		if (millicelsius() >= opt_temp){
+			if(opt_led) {
+				fwrite("1\n", 2, 1, led);
+				rewind(led);
+			}
+			idle_inject();
+		} else {
+			idle_cancel();
+			if(opt_led) {
+				fwrite("0\n", 2, 1, led);
+				rewind(led);
+			}
+		}
 		usleep(100000); /* 1/10th of a second */
 	}
 }
