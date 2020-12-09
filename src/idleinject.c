@@ -18,6 +18,7 @@
 #define MAXTEMP 115000
 #endif
 
+static volatile int die = 0;
 static int nprocs = 0;
 #define PROC_ALREADY_STOPPED 1
 #define PROC_SPECIAL 2
@@ -158,6 +159,10 @@ void usage(char **argv) {
 	);
 }
 
+int sig_handler(int sig) {
+	die = 1;
+}
+
 int main(int argc, char **argv) {
 	int i;
 	FILE *led = NULL;
@@ -203,9 +208,15 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	atexit(idle_cancel);
+	signal(SIGINT, sig_handler);
+	signal(SIGTERM, sig_handler);
+	signal(SIGKILL, sig_handler);
 
 	for (;;) {
+		if(die) {
+			idle_cancel();
+			exit(0);
+		}
 		if (millicelsius() >= opt_temp){
 			if(opt_led) {
 				fwrite("1\n", 2, 1, led);
