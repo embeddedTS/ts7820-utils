@@ -100,7 +100,7 @@ int main(int argc, char **argv)
 		if(fpga_rev & (1 << 31))
 			printf("fpga_hash=\"%x-dirty\"\n", fpga_hash);
 		else
-			printf("fpga_hash=\"%x-dirty\"\n", fpga_hash);
+			printf("fpga_hash=\"%x\"\n", fpga_hash);
 	}
 
 	return 0;
