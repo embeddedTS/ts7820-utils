@@ -16,7 +16,7 @@
 void usage(char **argv) {
 	fprintf(stderr,
 		"Usage: %s [OPTIONS] ...\n"
-		"Technologic Systems Production Info\n"
+		"embeddedTS Production Info\n"
 		"\n"
 		"  -d, --device           Specify device to read/write\n"
 		"  -r, --read             Read info from last 512b block of typically mmcblk*boot1\n"

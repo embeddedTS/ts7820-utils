@@ -1,12 +1,12 @@
 Source: ts7820-utils
 Section: utils
 Priority: optional
-Maintainer: Mark Featherston <mark@embeddedarm.com>
+Maintainer: Mark Featherston <mark@embeddedTS.com>
 Build-Depends: debhelper (>= 9), autotools-dev
 Standards-Version: 3.9.8
-Homepage: https://github.com/embeddedarm/ts7820-utils
-#Vcs-Browser: https://github.com/embeddedarm/ts7820-utils
-#Vcs-Git: https://github.com/embeddedarm/ts7820-utils.git
+Homepage: https://github.com/embeddedTS/ts7820-utils
+#Vcs-Browser: https://github.com/embeddedTS/ts7820-utils
+#Vcs-Git: https://github.com/embeddedTS/ts7820-utils.git
 
 Package: ts7820-utils
 Architecture: any

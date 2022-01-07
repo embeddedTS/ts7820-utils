@@ -20,7 +20,7 @@
 void usage(char **argv) {
 	fprintf(stderr,
 		"Usage: %s [OPTIONS] ...\n"
-		"Technologic Systems System Utility\n"
+		"embeddedTS System Utility\n"
 		"\n"
 		"  -i, --info             Print board revisions\n"
 		"  -h, --help             This message\n"

@@ -122,7 +122,7 @@ uint32_t set_baudrate(uint8_t channel, uint32_t baudrate) {
 void usage(char **argv) {
 	fprintf(stderr,
 		"Usage: %s [OPTIONS] ...\n"
-		"Technologic Systems UART baud rate control\n"
+		"embeddedTS UART baud rate control\n"
 		"\n"
 		"  -p, --port <num>       Set port to modify\n"
 		"  -b, --baud <rate>      Specify target baud rate\n"
