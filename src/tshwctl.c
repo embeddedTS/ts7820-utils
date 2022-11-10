@@ -94,6 +94,7 @@ int main(int argc, char **argv)
 	if (opt_info){
 		uint32_t fpga_rev = fpga_peek32(0x0);
 		uint32_t fpga_hash = fpga_peek32(0x4);
+		uint32_t straps = fpga_peek32(0x10) & 0x3f;
 
 		printf("model=0x%X\n", get_model());
 		printf("fpga_rev=%d\n", fpga_rev & 0x7fffffff);
@@ -101,6 +102,7 @@ int main(int argc, char **argv)
 			printf("fpga_hash=\"%x-dirty\"\n", fpga_hash);
 		else
 			printf("fpga_hash=\"%x\"\n", fpga_hash);
+		printf("opts=0x%X\n", straps);
 	}
 
 	return 0;
