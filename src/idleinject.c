@@ -165,6 +165,7 @@ int sig_handler(int sig) {
 
 int main(int argc, char **argv) {
 	int i;
+	int led_status = -1;
 	FILE *led = NULL;
 	char *opt_led = 0;
 	int opt_temp = MAXTEMP;
@@ -218,16 +219,18 @@ int main(int argc, char **argv) {
 			exit(0);
 		}
 		if (millicelsius() >= opt_temp){
-			if(opt_led) {
+			if(opt_led && led_status != 1) {
 				fwrite("1\n", 2, 1, led);
 				rewind(led);
+				led_status = 1;
 			}
 			idle_inject();
 		} else {
 			idle_cancel();
-			if(opt_led) {
+			if(opt_led && led_status != 0) {
 				fwrite("0\n", 2, 1, led);
 				rewind(led);
+				led_status = 0;
 			}
 		}
 		usleep(100000); /* 1/10th of a second */
